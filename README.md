@@ -17,9 +17,12 @@ user_roles, role_permissions) fast, safe and measurable, with 200,000 sample use
 | `sql/05_queries_optimized.sql` | Same queries AFTER tuning |
 | `sql/06_security.sql` | bcrypt login function, lockout, least-privilege role |
 | `pgbench/*.sql` | Load-test scripts |
-| `config/pgbouncer.ini` | Optional connection pooling |
+| `sql/07_config_tuning.sql` | Server memory settings and `listen_addresses = localhost` |
+| `config/pgbouncer.ini` | Optional connection pooling (provided, not load-tested) |
 | `scripts/run_all.ps1` | Runs everything and saves results to `results/` |
 | `scripts/backup_restore.ps1` | Backup (`pg_dump`) and restore test |
+| `scripts/stress_test.ps1` | pgbench with 20, 50 and 90 clients |
+| `docs/` | Normalization review, security/config notes, test plan, progress log |
 
 ## 3. How to run (Windows PowerShell)
 ```powershell
@@ -58,13 +61,26 @@ pgbench (20 clients, 4 threads, 30 s each, 0 failed transactions):
 | perm_join (4-table join) | 5,233 tps | 3.82 ms |
 | perm_mv (materialized view) | 15,431 tps | 1.30 ms |
 
-Raw outputs are in the `results/` folder.
+Stress test after configuration tuning (15 s per run, 0 failed transactions):
+
+| Clients | login_email tps | perm_mv tps |
+|---|---|---|
+| 20 | 17,093 | 18,414 |
+| 50 | 11,854 | 18,921 |
+| 90 | 12,318 | 18,827 |
+
+`login_email` peaks at 20 clients and slows down beyond that (the laptop has 8 threads), which is
+the case for connection pooling. `perm_mv` stays flat. Raw outputs are in the `results/` folder;
+see `docs/test_plan.md` for the full test plan.
 
 ## 6. Security and backup
 - Passwords stored as bcrypt hashes (`pgcrypto`, `crypt` + `gen_salt('bf')`), never plain text.
 - `authenticate_user()` locks an account after 5 failed attempts.
 - App role `login_app` can only run the login function and read permissions.
-- Backup/restore verified with `scripts/backup_restore.ps1`.
+- Backup/restore verified with `scripts/backup_restore.ps1` (200,000 users restored).
+- PostgreSQL listens on `localhost` only (`sql/07_config_tuning.sql`); see `docs/security_and_config.md`.
+- Known limitations: SSL is off (acceptable only for local connections), `login_app` has a placeholder
+  password in `sql/06_security.sql`, and PgBouncer was not installed here.
 
 ## 7. Differences from the original roadmap
 The roadmap mentions MySQL, Redis and a UI. This project uses PostgreSQL, so:
